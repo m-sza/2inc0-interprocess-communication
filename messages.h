@@ -18,5 +18,10 @@
 #define MESSAGES_H
 
 // define the data structures for your messages here
+typedef struct {
+    int jobID;
+    int data;
+    int serviceID;
+} MQ_REQUEST_MESSAGE;
 
 #endif
