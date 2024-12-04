@@ -24,4 +24,9 @@ typedef struct {
     int serviceID;
 } MQ_REQUEST_MESSAGE;
 
+typedef struct {
+    int jobID;
+    int data;
+} MQ_RESPONSE_MESSAGE;
+
 #endif
