@@ -32,7 +32,7 @@
 #include "settings.h"  
 #include "messages.h"
 
-#define GROUP_NUMBER 101
+#define GROUP_NUMBER 23
 #define MQ_SIZE 30
 
 char client2dealer_name[MQ_SIZE];
