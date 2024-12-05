@@ -30,19 +30,49 @@ static void rsleep (int t);
 
 int main (int argc, char * argv[])
 {
-    // TODO:
-    // (see message_queue_test() in interprocess_basic.c)
-    //  * open the two message queues (whose names are provided in the
-    //    arguments)
-    //  * repeatedly:
-    //      - read from the S1 message queue the new job to do
-    //      - wait a random amount of time (e.g. rsleep(10000);)
-    //      - do the job 
-    //      - write the results to the Rsp message queue
-    //    until there are no more tasks to do
-    //  * close the message queues
+   // Check for required arguments
+    if (argc < 3) {
+        perror("Message queues weren't provided");
+        exit(EXIT_FAILURE);
+    }
 
-    return(0);
+    // Open the response and service message queues
+    mqd_t response_queue = mq_open(argv[1], O_WRONLY);
+    if (response_mq == (mqd_t)-1) {
+        perror("Failed to open response message queue");
+        exit(EXIT_FAILURE);
+    }
+
+    mqd_t service_mq = mq_open(argv[2], O_RDONLY);
+    if (service_mq == (mqd_t)-1) {
+        perror("Failed to open service message queue");
+        mq_close(response_mq);
+        exit(EXIT_FAILURE);
+    }
+
+    WorkerJobMessage workerJobMessage;
+    WorkerJobMessage resultMessage;
+    unsigned int priority;
+
+    // Main loop to receive and process messages
+    while (mq_receive(service_mq, (char *)&workerJobMessage, sizeof(WorkerJobMessage), &priority) > 0) {
+        resultMessage.id = workerJobMessage.id;
+        resultMessage.data = service(workerJobMessage.data);
+
+        // Simulate work
+        rsleep(10000);
+
+        // Send the result back through the response message queue
+        if (mq_send(response_mq, (char *)&resultMessage, sizeof(resultMessage), 1) == -1) {
+            perror("Failed to send result message");
+        }
+    }
+
+    // Cleanup
+    mq_close(response_mq);
+    mq_close(service_mq);
+
+    return 0;
 }
 
 /*
