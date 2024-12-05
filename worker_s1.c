@@ -37,7 +37,7 @@ int main (int argc, char * argv[])
     }
 
     // Open the response and service message queues
-    mqd_t response_queue = mq_open(argv[1], O_WRONLY);
+    mqd_t response_mq = mq_open(argv[1], O_WRONLY);
     if (response_mq == (mqd_t)-1) {
         perror("Failed to open response message queue");
         exit(EXIT_FAILURE);
@@ -54,12 +54,12 @@ int main (int argc, char * argv[])
     WorkerJobMessage resultMessage;
     unsigned int priority;
 
-    // Main loop to receive and process messages
+    // Receive messages and do jobs
     while (mq_receive(service_mq, (char *)&workerJobMessage, sizeof(WorkerJobMessage), &priority) > 0) {
         resultMessage.id = workerJobMessage.id;
         resultMessage.data = service(workerJobMessage.data);
 
-        // Simulate work
+        // wait
         rsleep(10000);
 
         // Send the result back through the response message queue
@@ -68,7 +68,7 @@ int main (int argc, char * argv[])
         }
     }
 
-    // Cleanup
+    // Close the queues when done.
     mq_close(response_mq);
     mq_close(service_mq);
 
