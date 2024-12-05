@@ -55,22 +55,29 @@ int main (int argc, char * argv[])
     unsigned int priority;
 
     // Receive messages and do jobs
-    while (mq_receive(service_mq, (char *)&reqMsg, sizeof(MQ_REQUEST_MESSAGE), &priority) > 0) {
+    while (1) {  // Run indefinitely until killed by router
+        ssize_t bytes_read = mq_receive(service_mq, (char *)&reqMsg, sizeof(MQ_REQUEST_MESSAGE), &priority);
+
+        if (bytes_read == -1) {
+            if (errno == EAGAIN || errno == EINTR) continue;
+            perror("mq_receive failed");
+            break;
+        }
+
         printf("Worker received job: %d\n", reqMsg.jobID);
-        
+    
+        // Process the message and send response
         respMsg.jobID = reqMsg.jobID;
         respMsg.data = service(reqMsg.data);
-
-        // wait
+        
         rsleep(10000);
 
-        // Send the result back through the response message queue
         if (mq_send(response_mq, (char *)&respMsg, sizeof(respMsg), 1) == -1) {
-            perror("Failed to send result message");
+            perror("Failed to send result");
+            continue;  // Try next message even if send fails
         }
     }
 
-    // Close the queues when done.
     mq_close(response_mq);
     mq_close(service_mq);
 

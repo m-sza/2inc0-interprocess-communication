@@ -64,17 +64,25 @@ void create_message_queues() {
 
   // client mq
   struct mq_attr attr;
+
+  attr.mq_flags = O_NONBLOCK;  // Non-blocking ?!
+
   attr.mq_maxmsg  = MQ_MAX_MESSAGES;
   attr.mq_msgsize = sizeof (MQ_REQUEST_MESSAGE);
-  client2dealer_mq = mq_open (client2dealer_name, O_RDONLY | O_CREAT | O_EXCL, 0600, &attr);
-
+  
+  client2dealer_mq = mq_open (client2dealer_name, O_RDONLY | O_CREAT | O_EXCL | O_NONBLOCK, 0600, &attr);
+  
   // workers mq
   attr.mq_maxmsg  = MQ_MAX_MESSAGES;
-  attr.mq_msgsize = sizeof (MQ_RESPONSE_MESSAGE);
+  attr.mq_msgsize = sizeof(MQ_REQUEST_MESSAGE);  // For service queues
+  
+  dealer2worker1_mq = mq_open (dealer2worker1_name, O_WRONLY | O_CREAT | O_EXCL | O_NONBLOCK, 0600, &attr);
+  dealer2worker2_mq = mq_open(dealer2worker2_name, O_WRONLY | O_CREAT | O_EXCL | O_NONBLOCK, 0600, &attr);
+  
+  // response queue 
+  attr.mq_msgsize = sizeof(MQ_RESPONSE_MESSAGE);  // For response queue
 
-  dealer2worker1_mq = mq_open (dealer2worker1_name, O_WRONLY | O_CREAT | O_EXCL, 0600, &attr);
-  dealer2worker2_mq = mq_open (dealer2worker2_name, O_WRONLY | O_CREAT | O_EXCL, 0600, &attr);
-  worker2dealer_mq = mq_open (worker2dealer_name, O_RDONLY | O_CREAT | O_EXCL, 0600, &attr);
+  worker2dealer_mq = mq_open (worker2dealer_name, O_RDONLY | O_CREAT | O_EXCL | O_NONBLOCK, 0600, &attr);
 }
 
 void create_child_processes() {
@@ -136,34 +144,55 @@ void handle_queues() {
   MQ_REQUEST_MESSAGE req;
   MQ_RESPONSE_MESSAGE rsp;
   int client_alive = 1;
-  int received;
+  int pending_jobs = 0;
+  struct timespec timeout = {0, 100000000}; // 100ms timeout
 
-  while (client_alive) {
-    int status;
-    if (waitpid(clientPID, &status, WNOHANG) > 0) {
-        client_alive = 0;
+  while (client_alive || pending_jobs > 0) {
+    // int status;
+    
+    // Check if client is still running
+    if (client_alive && waitpid(clientPID, NULL, WNOHANG) > 0) {
+      client_alive = 0;
+      printf("Client process ended\n");
     }
-    // get request from client
-    received = mq_receive(client2dealer_mq, (char *)&req, sizeof(req), NULL);
-    if (received != -1) {
+
+    // Process client requests
+    if (mq_receive(client2dealer_mq, (char *)&req, sizeof(req), NULL) != -1) {
       printf("Router received request: job %d, service %d\n", req.jobID, req.serviceID);
+      pending_jobs++;
 
-      if (req.serviceID == 1) {
-        mq_send(dealer2worker1_mq, (char *)&req, sizeof(req), 0);
-        printf("Router forwarded job %d to Service 1\n", req.jobID);
-      } else if (req.serviceID == 2) {
-        mq_send(dealer2worker2_mq, (char *)&req, sizeof(req), 0);
-        printf("Router forwarded job %d to Service 2\n", req.jobID);
-      } else {
-        exit(1);
+
+
+      // Forward request to appropriate service queue
+      // Get the target queue
+      mqd_t target_mq = (req.serviceID == 1) ? dealer2worker1_mq : dealer2worker2_mq;
+      // Add request to queue
+      while (mq_timedsend(target_mq, (char *)&req, sizeof(req), 0, &timeout) == -1) {
+        if (errno != EAGAIN) break;
+        printf("Router forwarded job %d to Service %d\n", req.jobID, target_mq);
       }
+
+
+      // if (req.serviceID == 1) {
+      //   mq_send(dealer2worker1_mq, (char *)&req, sizeof(req), 0);
+      //   printf("Router forwarded job %d to Service 1\n", req.jobID);
+      // } else if (req.serviceID == 2) {
+      //   mq_send(dealer2worker2_mq, (char *)&req, sizeof(req), 0);
+      //   printf("Router forwarded job %d to Service 2\n", req.jobID);
+      // } else {
+      //   exit(1);
+      // }
     }
 
-    while (mq_receive(worker2dealer_mq, (char *)&rsp, sizeof(rsp), NULL) != -1) {
+    while (mq_receive(worker2dealer_mq, (char *)&rsp, sizeof(rsp), NULL) > 0) {
       printf("%d -> %d\n", rsp.jobID, rsp.data);
+      pending_jobs--;
     }
+
+    usleep(1000);
   }
 
+  // Terminate workers
   for (int i = 0; i < N_SERV1; i++) {
     kill(worker1PIDs[i], SIGKILL);
     waitpid(worker1PIDs[i], NULL, 0);
