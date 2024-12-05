@@ -55,20 +55,20 @@ int main (int argc, char * argv[])
         exit(EXIT_FAILURE);
     }
 
-    WorkerJobMessage workerJobMessage;
-    WorkerJobMessage resultMessage;
+    MQ_REQUEST_MESSAGE reqMsg;
+    MQ_RESPONSE_MESSAGE respMsg;
     unsigned int priority;
 
     // Receive messages and do jobs
-    while (mq_receive(service_mq, (char *)&workerJobMessage, sizeof(WorkerJobMessage), &priority) > 0) {
-        resultMessage.id = workerJobMessage.id;
-        resultMessage.data = service(workerJobMessage.data);
+    while (mq_receive(service_mq, (char *)&reqMsg, sizeof(MQ_REQUEST_MESSAGE), &priority) > 0) {
+        respMsg.jobID = reqMsg.jobID;
+        respMsg.data = service(reqMsg.data);
 
         // wait
         rsleep(10000);
 
         // Send the result back through the response message queue
-        if (mq_send(response_mq, (char *)&resultMessage, sizeof(resultMessage), 1) == -1) {
+        if (mq_send(response_mq, (char *)&respMsg, sizeof(respMsg), 1) == -1) {
             perror("Failed to send result message");
         }
     }

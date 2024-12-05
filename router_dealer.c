@@ -25,6 +25,8 @@
 #include <unistd.h>    // for execlp
 #include <mqueue.h>    // for mq
 
+#include <signal.h>
+
 
 #include "settings.h"  
 #include "messages.h"
@@ -45,6 +47,13 @@ mqd_t worker2dealer_mq;
 int clientPID;
 int worker1PIDs[N_SERV1];
 int worker2PIDs[N_SERV2];
+
+void debug_mq_status() {
+    printf("Request MQ: %d\n", client2dealer_mq);
+    printf("Worker1 MQ: %d\n", dealer2worker1_mq);
+    printf("Worker2 MQ: %d\n", dealer2worker2_mq);
+    printf("Response MQ: %d\n", worker2dealer_mq);
+}
 
 void create_message_queues() {
   // set names
@@ -121,6 +130,8 @@ void create_child_processes() {
   }
 }
 
+
+
 void handle_queues() {
   MQ_REQUEST_MESSAGE req;
   MQ_RESPONSE_MESSAGE rsp;
@@ -135,10 +146,14 @@ void handle_queues() {
     // get request from client
     received = mq_receive(client2dealer_mq, (char *)&req, sizeof(req), NULL);
     if (received != -1) {
+      printf("Router received request: job %d, service %d\n", req.jobID, req.serviceID);
+
       if (req.serviceID == 1) {
         mq_send(dealer2worker1_mq, (char *)&req, sizeof(req), 0);
+        printf("Router forwarded job %d to Service 1\n", req.jobID);
       } else if (req.serviceID == 2) {
         mq_send(dealer2worker2_mq, (char *)&req, sizeof(req), 0);
+        printf("Router forwarded job %d to Service 2\n", req.jobID);
       } else {
         exit(1);
       }
@@ -179,11 +194,14 @@ int main (int argc, char * argv[])
     fprintf (stderr, "%s: invalid arguments\n", argv[0]);
   }
   
-
+  
   // TODO:
     //  * create the message queues (see message_queue_test() in
     //    interprocess_basic.c)
     create_message_queues();
+
+    debug_mq_status();
+
     //  * create the child processes (see process_test() and
     //    message_queue_test())
     create_child_processes();

@@ -25,7 +25,7 @@
 #include "messages.h"
 #include "request.h"
 
-static void rsleep (int t);
+// static void rsleep (int t);
 
 
 int main (int argc, char * argv[])
@@ -64,10 +64,12 @@ int main (int argc, char * argv[])
     // Send requests loop
     while ((result = getNextRequest(&msg.jobID, &msg.data, &msg.serviceID)) != NO_REQ)
     {
+        printf("Client sending job: %d, service: %d\n", msg.jobID, msg.serviceID);
         if (mq_send(mq_fd_request, (char *)&msg, sizeof(msg), 0) == -1)
         {
             perror("mq_send() failed");
-            break;
+            printf("Request: Job %d, Service %d\n", msg.jobID, msg.serviceID);
+            // break;
         }
     }
 
