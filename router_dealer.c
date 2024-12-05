@@ -49,12 +49,6 @@ int clientPID;
 int worker1PIDs[N_SERV1];
 int worker2PIDs[N_SERV2];
 
-void debug_mq_status() {
-    printf("Request MQ: %d\n", client2dealer_mq);
-    printf("Worker1 MQ: %d\n", dealer2worker1_mq);
-    printf("Worker2 MQ: %d\n", dealer2worker2_mq);
-    printf("Response MQ: %d\n", worker2dealer_mq);
-}
 
 void create_message_queues() {
   // set names
